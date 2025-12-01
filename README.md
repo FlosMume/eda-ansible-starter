@@ -1,5 +1,16 @@
 # 🎯 Event-Driven Ansible (EDA) — Starter Learning Kit
-A complete hands-on repository for learning **Event-Driven Automation using Ansible Rulebooks**, designed for beginners and intermediate DevOps engineers.
+This repository provides a hands-on learning environment for **Event-Driven Ansible (EDA)**, including rulebooks, Ansible Automation Platform workflows, event sources, and practical examples that connect theory to real automation scenarios.
+
+---
+
+## 🚀 Getting Started
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/<your-username>/<repo-name>.git
+cd <repo-name>
+```
 
 ---
 
