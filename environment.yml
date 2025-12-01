@@ -1,0 +1,6 @@
+name: eda_ansible
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+prefix: /home/myunix/miniconda3/envs/eda_ansible
