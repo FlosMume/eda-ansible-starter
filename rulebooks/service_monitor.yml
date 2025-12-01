@@ -1,0 +1,9 @@
+sources:
+  - ansible.eda.process:
+      name: sshd
+rules:
+  - name: service down
+    condition: event.status == "stopped"
+    action:
+      run_playbook:
+        name: ../playbooks/restart_service.yml

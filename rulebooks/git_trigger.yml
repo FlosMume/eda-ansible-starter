@@ -1,0 +1,9 @@
+sources:
+  - ansible.eda.git:
+      url: https://github.com/example/repo.git
+rules:
+  - name: git change detected
+    condition: event.change == "committed"
+    action:
+      run_playbook:
+        name: ../playbooks/simple_debug.yml

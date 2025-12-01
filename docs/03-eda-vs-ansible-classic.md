@@ -1,0 +1,3 @@
+# EDA vs Classic Ansible
+
+Differences explained...

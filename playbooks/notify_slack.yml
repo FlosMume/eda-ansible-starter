@@ -1,0 +1,6 @@
+---
+- hosts: localhost
+  tasks:
+    - name: Notify Slack
+      debug:
+        msg: "Slack notification triggered!"

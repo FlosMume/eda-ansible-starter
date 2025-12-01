@@ -1,0 +1,9 @@
+sources:
+  - ansible.eda.filewatch:
+      path: /tmp/messages
+rules:
+  - name: file modified trigger
+    condition: event.change == "modified"
+    action:
+      run_playbook:
+        name: ../playbooks/restart_service.yml
