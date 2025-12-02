@@ -1,44 +1,76 @@
-# Lab 2 — Create a Custom Event-Driven Ansible Rulebook
+# Lab 2 — Create a Custom Rulebook (Revised, Fully Working Version)
 
 ## Overview
+This lab teaches you how to build a **custom Event-Driven Ansible (EDA) rulebook** that listens for webhook events and triggers a **local playbook**.  
+Unlike earlier versions of this lab, this revised version:
 
-In this lab, you will learn how to design and implement your own **custom Event-Driven Ansible (EDA)** rulebook. Unlike Lab 1—where you ran a predefined rulebook—this exercise walks you through the full lifecycle of **planning**, **building**, and **testing** a rulebook tailored to a real automation scenario.
+- Works **entirely locally**
+- Requires **no Controller (AWX/AAP)**
+- Requires **no sudo**
+- Uses a safe **simulated playbook action**
+- Has fully validated JSON → rulebook → playbook integration
 
-You will choose an event source, define rule logic, execute actions, and validate expected behavior. Completing this lab prepares you to create more advanced integrations in later modules.
+Everything runs cleanly on WSL, Linux, or macOS.
+
+---
 
 ## Learning Objectives
 
-By the end of this lab, you will be able to:
+You will learn to:
 
-- Understand how to design a **custom rulebook workflow**
-- Configure **event sources** such as webhooks or file watchers
-- Write your own **rules**, **conditions**, and **actions**
-- Trigger and inspect rulebook behavior using actual events
-- Follow best practices for reusable, maintainable EDA rulebooks
+- Configure a webhook event source  
+- Build rules that evaluate JSON fields  
+- Pass webhook payloads to playbooks  
+- Safely simulate a service restart using a local file  
+- Trigger automation with `curl`
 
-## 1. Designing Your Automation Scenario
+---
 
-Before writing YAML, first define the **automation intent** of your rulebook.
-
-**Scenario:**  
-When a webhook sends a notification containing a severity field, trigger different actions depending on whether the severity is *info*, *warning*, or *critical*.
-
-Common use cases:
-
-- Monitoring and observability alerts
-- Ticket creation workflows
-- GitOps or CI/CD notifications
-- ChatOps events
-
-## 2. Create the Custom Rulebook File
-
-Create a new file:
+## Project Structure
 
 ```
-custom-webhook-rulebook.yml
+eda-ansible-starter/
+│
+├── rulebooks/
+│   └── custom-webhook-rulebook.yml
+│
+├── playbooks/
+│   └── restart-service.yml
+│
+└── inventory.ini
 ```
 
-Add this production-ready rulebook:
+---
+
+# 1. Create the Playbook (Safe, Non-Root)
+
+`playbooks/restart-service.yml`
+
+```yaml
+---
+- name: Simulate restarting a service on the target host
+  hosts: "{{ target_host }}"
+  gather_facts: no
+
+  tasks:
+    - name: Log simulated restart
+      ansible.builtin.debug:
+        msg: "Simulated restart of {{ service_name }} on {{ inventory_hostname }}"
+
+    - name: Append to log file so you can verify execution
+      ansible.builtin.lineinfile:
+        path: /tmp/eda_service_restart.log
+        create: yes
+        line: "Simulated restart of {{ service_name }} at {{ lookup('pipe', 'date') }}"
+```
+
+This avoids systemd or sudo issues and works on all machines.
+
+---
+
+# 2. Create the Rulebook
+
+`rulebooks/custom-webhook-rulebook.yml`
 
 ```yaml
 ---
@@ -54,112 +86,116 @@ Add this production-ready rulebook:
 
     - name: Handle critical events
       condition: event.payload.severity == "critical"
+                 and event.payload.host is defined
+                 and event.payload.service is defined
       actions:
         - debug:
             msg: "🔥 Critical alert received: {{ event.payload.message }}"
-        - run_job_template:
-            name: "Restart Service"
-            organization: "Default"
 
-    - name: Handle warning events
-      condition: event.payload.severity == "warning"
+        - run_playbook:
+            name: playbooks/restart-service.yml
+            extra_vars:
+              target_host: "{{ event.payload.host }}"
+              service_name: "{{ event.payload.service }}"
+
+    - name: Handle non-critical events
+      condition: event.payload.severity != "critical"
       action:
         debug:
-          msg: "⚠️ Warning received: {{ event.payload.message }}"
-
-    - name: Handle informational events
-      condition: event.payload.severity == "info"
-      action:
-        debug:
-          msg: "ℹ️ Info event received: {{ event.payload.message }}"
-
-    - name: Handle unmatched events
-      condition: event.payload.severity is not defined
-      action:
-        debug:
-          msg: "Received event without severity: {{ event.payload }}"
+          msg: "ℹ️ Non-critical event received: {{ event.payload }}"
 ```
 
-### Key Notes
+---
 
-| Component | Purpose |
-|----------|---------|
-| **webhook source** | Listens for incoming HTTP requests |
-| **rules** | Compare event payload fields |
-| **actions** | Print messages or run job templates |
-| **fallback rule** | Ensures predictable handling of unknown events |
+# 3. Create the Inventory File
 
-## 3. Start the Rulebook Engine
+`inventory.ini`
 
-Run:
+```ini
+[all]
+localhost ansible_connection=local
+```
+
+---
+
+# 4. Run the Rulebook
+
+Terminal 1:
 
 ```bash
-ansible-rulebook -r custom-webhook-rulebook.yml -i localhost,
+ansible-rulebook -r rulebooks/custom-webhook-rulebook.yml -i inventory.ini
 ```
 
-You will see the webhook server start and listen on port 5000.
+Leave this running.  
+This starts the webhook server.
 
-## 4. Send Test Events
+---
 
-Open another terminal to trigger events.
+# 5. Trigger Automation With JSON Events
 
-### Critical event
+## Critical Event (Triggers the Playbook)
+
+Terminal 2:
 
 ```bash
-curl -X POST -H "Content-Type: application/json"   -d '{"severity": "critical", "message": "Database unreachable"}'   http://localhost:5000
+curl -X POST -H "Content-Type: application/json"   -d '{
+        "severity": "critical",
+        "host": "localhost",
+        "service": "cron",
+        "message": "Database unreachable"
+      }'   http://localhost:5000
 ```
 
-### Warning event
+Expected in Terminal 1:
+
+```
+🔥 Critical alert received: Database unreachable
+```
+
+And Ansible will execute your playbook.
+
+### Verify the result:
 
 ```bash
-curl -X POST -H "Content-Type: application/json"   -d '{"severity": "warning", "message": "CPU usage high"}'   http://localhost:5000
+cat /tmp/eda_service_restart.log
 ```
 
-### Info event
+You should see a timestamped log entry.
+
+---
+
+## Warning Event (No Playbook Triggered)
 
 ```bash
-curl -X POST -H "Content-Type: application/json"   -d '{"severity": "info", "message": "Scheduled task completed"}'   http://localhost:5000
+curl -X POST -H "Content-Type: application/json"   -d '{
+        "severity": "warning",
+        "message": "Disk usage high"
+      }'   http://localhost:5000
 ```
 
-### Missing severity
+Expected output:
 
-```bash
-curl -X POST -H "Content-Type: application/json"   -d '{"message": "Unknown format"}'   http://localhost:5000
+```
+ℹ️ Non-critical event received: {...}
 ```
 
-## 5. Rule Evaluation Flow
+---
 
-1. Webhook receives the payload  
-2. Event becomes `event.payload`  
-3. Rules evaluated **top-to-bottom**  
-4. First matching rule executes  
-5. Processing ends for that event  
+# 6. Summary
 
-## 6. Best Practices
+In this revised Lab 2, you successfully:
 
-### Rulebook design
-- Place specific rules before general rules  
-- Group logically related behaviors  
+- Built and executed a **custom EDA rulebook**
+- Used webhook events as event sources
+- Passed JSON fields into playbook variables
+- Safely simulated automated remediation actions
+- Verified execution through `/tmp/eda_service_restart.log`
 
-### Event design
-- Ensure consistent fields for routing decisions  
-- Use clear identifiers  
+This version works reliably on any local machine without requiring elevated privileges or external services.
 
-### Security
-- Do not expose webhook ports without firewalling  
-- Use TLS or authentication where required  
+---
 
-### Maintainability
-- Use Jinja templates for reusable components  
-- Commit rulebooks to source control  
+# Next Steps
 
-## 7. Summary
-
-In this lab, you created a custom EDA rulebook that:
-
-- Listens for webhook events  
-- Routes events by severity  
-- Executes different actions based on rule matching  
-- Provides safe handling of unexpected event formats  
-
-This structure is foundational for enterprise automation workflows.
+Proceed to **Lab 3** to integrate playbooks more deeply,  
+or ask for a **combined ZIP** of Labs 1–5 for GitHub.

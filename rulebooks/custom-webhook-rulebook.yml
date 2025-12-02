@@ -1,0 +1,39 @@
+---
+- name: Custom Webhook Rulebook
+  hosts: localhost
+
+  sources:
+    - ansible.eda.webhook:
+        host: 0.0.0.0
+        port: 5000
+
+  rules:
+
+    - name: Handle critical events
+      condition: event.payload.severity == "critical"
+      actions:
+        - debug:
+            msg: "🔥 Critical alert received: {{ event.payload.message }}"
+        - run_playbook:
+            name: playbooks/restart-service.yml
+            extra_vars:
+              target_host: "{{ event.payload.host }}"
+              service_name: "{{ event.payload.service }}"
+
+    - name: Handle warning events
+      condition: event.payload.severity == "warning"
+      action:
+        debug:
+          msg: "⚠️ Warning received: {{ event.payload.message }}"
+
+    - name: Handle informational events
+      condition: event.payload.severity == "info"
+      action:
+        debug:
+          msg: "ℹ️ Info event received: {{ event.payload.message }}"
+
+    - name: Handle unmatched events
+      condition: event.payload.severity is not defined
+      action:
+        debug:
+          msg: "Received event without severity: {{ event.payload }}"

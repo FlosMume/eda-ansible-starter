@@ -1,6 +1,0 @@
----
-- hosts: localhost
-  tasks:
-    - name: Restart dummy service
-      debug:
-        msg: "Service restart triggered!"

@@ -1,0 +1,16 @@
+---
+- name: My First EDA Rulebook
+  hosts: localhost
+
+  sources:
+    - ansible.eda.generic:
+        payload:
+          - message: "hello world"
+          - message: "trigger action"
+
+  rules:
+    - name: Print incoming messages
+      condition: event.message is defined
+      action:
+        debug:
+          msg: "Received event: {{ event.message }}"
